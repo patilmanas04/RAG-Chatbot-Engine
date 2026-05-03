@@ -14,7 +14,9 @@ engine = create_engine(
       "ssl_verify_cert": True,
       "ssl_verify_identity": True
     }
-  }
+  },
+  pool_pre_ping=True,
+  pool_recycle=300
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
