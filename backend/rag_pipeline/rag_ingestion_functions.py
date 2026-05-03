@@ -6,8 +6,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.retrievers import BM25Retriever
 
-import base64, uuid, os, json
+import base64, uuid, os, json, pickle, time
 
 from dotenv import load_dotenv
 
@@ -74,7 +75,7 @@ def create_ai_enhanced_summary(content_data_of_chunk):
   tables=content_data_of_chunk["tables"]
   images=content_data_of_chunk["images"]
   try:
-    llm=ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+    llm=ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
 
     prompt=f"""You are creating a searchable description for document content retrieval.
     YOUR TASK:
@@ -149,6 +150,7 @@ def process_chunks(chunks, project_id: int):
     if content_data_of_chunk['images'] or content_data_of_chunk['tables']:
       try:
         enhanced_summary=create_ai_enhanced_summary(content_data_of_chunk)
+        time.sleep(2) # Sleep for 2 seconds and them again start working just to respect the Gemini API Rate Limit
       except Exception as e:
         enhanced_summary=content_data_of_chunk["text"]
     else:
@@ -158,9 +160,9 @@ def process_chunks(chunks, project_id: int):
       page_content=enhanced_summary,
       metadata={
         "project_id": project_id,
-        "raw_text": content_data_of_chunk["text"],
-        "tables_html": json.dumps(content_data_of_chunk["tables"]),
-        "image_paths": json.dumps(saved_image_paths)
+        # "raw_text": content_data_of_chunk["text"],
+        # "tables_html": json.dumps(content_data_of_chunk["tables"]),
+        # "image_paths": json.dumps(saved_image_paths)
       }
     )
 
@@ -168,16 +170,27 @@ def process_chunks(chunks, project_id: int):
   return langchain_documents
 
 # --- FINAL STEP: CONVERTING CHUNKS INTO VECTOR EMBEDDIGNS AND SAVING THEM INTO VECTOR STORE ---  
-def create_vector_store(langchain_documents, persist_directory="dbv1/chromadb"):
+def create_vector_store(langchain_documents, project_id: int, persist_directory="dbv1/chromadb"):
   """Create and persist ChromaDB vector store"""
   try:
     embedding_model=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    collection_name=f"project_vault_{project_id}"
     vector_store=Chroma.from_documents(
       documents=langchain_documents,
       persist_directory=persist_directory,
+      collection_name=collection_name,
       embedding=embedding_model,
       collection_metadata={"hnsw:space": "cosine"}
     )
-    return vector_store
+
+    bm25_dir="dbv1/bm25_indices"
+    os.makedirs(bm25_dir, exist_ok=True)
+
+    bm25_retriever=BM25Retriever.from_documents(langchain_documents)
+
+    bm25_file_path=os.path.join(bm25_dir, f"project_vault_{project_id}.pkl")
+
+    with open(bm25_file_path, "wb") as f:
+      pickle.dump(bm25_retriever, f)
   except Exception as e:
     raise e
