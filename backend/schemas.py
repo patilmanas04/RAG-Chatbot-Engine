@@ -11,3 +11,6 @@ class Token(BaseModel):
 class ProjectCreate(BaseModel):
   name: str
   description: str | None = None
+
+class ChatRequest(BaseModel):
+  message: str
