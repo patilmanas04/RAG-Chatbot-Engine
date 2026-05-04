@@ -42,3 +42,12 @@ class ChatMessage(Base):
   role=Column(String(50))
   content=Column(Text)
   created_at=Column(DateTime(timezone=True), server_default=func.now())
+
+class ProjectDocument(Base):
+  __tablename__="project_documents"
+
+  id=Column(Integer, primary_key=True, index=True)
+  project_id=Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+  file_name=Column(String(255))
+  file_path=Column(String(500))
+  created_at=Column(DateTime(timezone=True), server_default=func.now())
