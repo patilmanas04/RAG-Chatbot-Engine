@@ -183,7 +183,7 @@ def create_vector_store(langchain_documents, project_id: int, persist_directory=
       collection_metadata={"hnsw:space": "cosine"}
     )
 
-    bm25_dir="dbv1/bm25_indices"
+    bm25_dir="./dbv1/bm25_indices"
     os.makedirs(bm25_dir, exist_ok=True)
 
     bm25_retriever=BM25Retriever.from_documents(langchain_documents)
