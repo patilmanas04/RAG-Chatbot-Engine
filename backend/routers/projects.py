@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi.responses import FileResponse
 from schemas import ProjectCreate
 from dependencies import get_db, get_current_user
 from sqlalchemy.orm import Session
@@ -211,3 +212,66 @@ def get_chat_history(
     "status": "success",
     "data": chat_history
   }
+
+# List all the documents of the specified project
+@router.get("/{project_id}/documents")
+def get_project_documents(
+  project_id: int,
+  current_user: models.User=Depends(get_current_user),
+  db: Session=Depends(get_db)
+):
+  project=db.query(models.Project).filter(
+    models.Project.id==project_id,
+    models.Project.owner_id==current_user.id
+  ).first()
+
+  if not project:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Project not found or unauthorized"
+    )
+  
+  docs=db.query(models.ProjectDocument).filter(
+    models.ProjectDocument.project_id==project_id
+  ).all()
+
+  return {
+    "status": "success",
+    "data": docs
+  }
+
+# Serve the actual pdf to the frontend
+@router.get("/{project_id}/documents/{document_id}/view")
+def view_document(
+  project_id: int,
+  document_id: int,
+  current_user: models.User=Depends(get_current_user),
+  db: Session=Depends(get_db)
+):
+  project=db.query(models.Project).filter(
+    models.Project.id==project_id,
+    models.Project.owner_id==current_user.id
+  ).first()
+
+  if not project:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Project not found or unauthorized"
+    )
+  
+  doc=db.query(models.ProjectDocument).filter(
+    models.ProjectDocument.project_id==project_id,
+    models.ProjectDocument.id==document_id
+  ).first()
+
+  if not doc or not os.path.exists(doc.file_path):
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="File not found on server"
+    )
+  
+  return FileResponse(
+    path=doc.file_path,
+    media_type="application/pdf",
+    filename=doc.file_name
+  )
