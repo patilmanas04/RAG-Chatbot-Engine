@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -41,6 +41,7 @@ class ChatMessage(Base):
   project_id=Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
   role=Column(String(50))
   content=Column(Text)
+  citations=Column(JSON, default=[])
   created_at=Column(DateTime(timezone=True), server_default=func.now())
 
 class ProjectDocument(Base):
