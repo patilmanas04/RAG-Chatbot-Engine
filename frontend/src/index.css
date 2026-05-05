@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* ─── Register semantic tokens with Tailwind v4 ─── */
+@theme {
+  --font-sans: 'Inter', sans-serif;
+
+  --color-page: var(--page);
+  --color-page-alt: var(--page-alt);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-input: var(--input-bg);
+  --color-header: var(--header-bg);
+  --color-modal: var(--modal-bg);
+
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+  --color-edge-hover: var(--edge-hover);
+
+  --color-heading: var(--heading);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-glow: var(--glow);
+  --color-backdrop: var(--backdrop);
+  --color-skeleton: var(--skeleton);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DARK THEME (default)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  --page: #020617;
+  --page-alt: #0f172a;
+  --surface: rgba(255, 255, 255, 0.025);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --header-bg: rgba(2, 6, 23, 0.80);
+  --modal-bg: rgba(15, 23, 42, 0.95);
+
+  --edge: rgba(255, 255, 255, 0.05);
+  --edge-strong: rgba(255, 255, 255, 0.08);
+  --edge-hover: rgba(255, 255, 255, 0.12);
+
+  --heading: #ffffff;
+  --body: #94a3b8;
+  --muted: #64748b;
+  --faint: #475569;
+
+  --glow: rgba(139, 92, 246, 0.08);
+  --backdrop: rgba(0, 0, 0, 0.60);
+  --skeleton: rgba(255, 255, 255, 0.06);
+
+  color-scheme: dark;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   LIGHT THEME
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="light"] {
+  --page: #f8fafc;
+  --page-alt: #ffffff;
+  --surface: rgba(0, 0, 0, 0.025);
+  --surface-hover: rgba(0, 0, 0, 0.05);
+  --input-bg: rgba(0, 0, 0, 0.035);
+  --header-bg: rgba(248, 250, 252, 0.80);
+  --modal-bg: rgba(255, 255, 255, 0.96);
+
+  --edge: rgba(0, 0, 0, 0.07);
+  --edge-strong: rgba(0, 0, 0, 0.10);
+  --edge-hover: rgba(0, 0, 0, 0.15);
+
+  --heading: #0f172a;
+  --body: #475569;
+  --muted: #64748b;
+  --faint: #94a3b8;
+
+  --glow: rgba(139, 92, 246, 0.06);
+  --backdrop: rgba(0, 0, 0, 0.40);
+  --skeleton: rgba(0, 0, 0, 0.06);
+
+  color-scheme: light;
+}
+
+/* ─── Smooth theme transition ─── */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
+}
+
+/* Opt-out for elements that have their own transitions */
+.no-theme-transition,
+.no-theme-transition *,
+input,
+textarea,
+button {
+  transition-property: none;
+}
