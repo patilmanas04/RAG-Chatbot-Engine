@@ -75,7 +75,7 @@ def create_ai_enhanced_summary(content_data_of_chunk):
   tables=content_data_of_chunk["tables"]
   images=content_data_of_chunk["images"]
   try:
-    llm=ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+    llm=ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0.3)
 
     prompt=f"""You are creating a searchable description for document content retrieval.
     YOUR TASK:
@@ -121,7 +121,7 @@ def create_ai_enhanced_summary(content_data_of_chunk):
     return summary
 
 # -- PROCESS ALL CHUNKS AND CREATE AI ENHANCED SUMMARIES WHEREVER NEEDED AND CONVERT THEM INTO LANGCHAIN DOCUMENTS ---
-def process_chunks(chunks, project_id: int):
+def process_chunks(chunks, project_id: int, file_name: str):
   """Process all chunks with AI Summary"""
   langchain_documents=[]
 
@@ -147,7 +147,9 @@ def process_chunks(chunks, project_id: int):
         except Exception as e:
           continue
 
-    if content_data_of_chunk['images'] or content_data_of_chunk['tables']:
+    has_visuals=bool(content_data_of_chunk['images'] or content_data_of_chunk['tables'])
+
+    if has_visuals:
       try:
         enhanced_summary=create_ai_enhanced_summary(content_data_of_chunk)
         time.sleep(2) # Sleep for 2 seconds and them again start working just to respect the Gemini API Rate Limit
@@ -156,13 +158,21 @@ def process_chunks(chunks, project_id: int):
     else:
       enhanced_summary=content_data_of_chunk["text"]
 
+    page_numbers=[]
+    if hasattr(chunk, 'metadata') and hasattr(chunk.metadata, 'orig_elements'):
+      for element in chunk.metadata.orig_elements:
+        if hasattr(element, 'metadata') and hasattr(element.metadata, 'page_number') and element.metadata.page_number:
+          page_numbers.append(element.metadata.page_number)
+
+    starting_page=min(page_numbers) if page_numbers else 1
+
     langchain_doc=Document(
       page_content=enhanced_summary,
       metadata={
         "project_id": project_id,
-        # "raw_text": content_data_of_chunk["text"],
-        # "tables_html": json.dumps(content_data_of_chunk["tables"]),
-        # "image_paths": json.dumps(saved_image_paths)
+        "source_file": file_name,
+        "page_number": starting_page,
+        "is_synthetic": has_visuals
       }
     )
 
@@ -175,22 +185,28 @@ def create_vector_store(langchain_documents, project_id: int, persist_directory=
   try:
     embedding_model=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     collection_name=f"project_vault_{project_id}"
-    vector_store=Chroma.from_documents(
-      documents=langchain_documents,
+    vector_store=Chroma(
       persist_directory=persist_directory,
       collection_name=collection_name,
-      embedding=embedding_model,
+      embedding_function=embedding_model,
       collection_metadata={"hnsw:space": "cosine"}
     )
 
-    bm25_dir="./dbv1/bm25_indices"
-    os.makedirs(bm25_dir, exist_ok=True)
+    vector_store.add_documents(langchain_documents)
 
-    bm25_retriever=BM25Retriever.from_documents(langchain_documents)
+    bm25_file_path=f"./dbv1/bm25_indices/project_vault_{project_id}.pkl"
+    os.makedirs(os.path.dirname(bm25_file_path), exist_ok=True)
 
-    bm25_file_path=os.path.join(bm25_dir, f"project_vault_{project_id}.pkl")
+    all_documents_for_bm25=langchain_documents
 
+    if os.path.exists(bm25_file_path):
+      with open(bm25_file_path, "rb") as f:
+        old_retriever=pickle.load(f)
+      old_langchain_documents=old_retriever.docs
+      all_documents_for_bm25=old_langchain_documents+langchain_documents
+
+    new_bm25_retriever=BM25Retriever.from_documents(all_documents_for_bm25)
     with open(bm25_file_path, "wb") as f:
-      pickle.dump(bm25_retriever, f)
+      pickle.dump(new_bm25_retriever, f)
   except Exception as e:
     raise e
