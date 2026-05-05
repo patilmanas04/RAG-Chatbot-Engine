@@ -15,8 +15,10 @@ def rag_ingestion(file_path: str, project_id: int):
     print(f"[Project {project_id}] Step 2: Creating logical chunks based on title...")
     chunks=create_chunks_by_title(elements)
 
+    file_name=os.path.basename(file_path)
+
     print(f"[Project {project_id}] Step 3: Generating AI summaries & saving images...")
-    langchain_documents=process_chunks(chunks, project_id)
+    langchain_documents=process_chunks(chunks, project_id, file_name)
 
     print(f"[Project {project_id}] Step 4: Embedding and saving to ChromaDB Vault...")
     create_vector_store(langchain_documents, project_id)
