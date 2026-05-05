@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateTime, JSON, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
+import enum
+
+class DocumentStatus(str, enum.Enum):
+  PENDING = "PENDING"       # Waiting for the RQ worker to pick it up
+  PROCESSING = "PROCESSING" # Currently being chunked/embedded
+  COMPLETED = "COMPLETED"   # Ready for RAG chat
+  FAILED = "FAILED"         # Something blew up in the pipeline
 
 # users table schema
 class User(Base):
@@ -51,4 +58,8 @@ class ProjectDocument(Base):
   project_id=Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
   file_name=Column(String(255))
   file_path=Column(String(500))
+  job_id=Column(String(255), nullable=True, index=True)
+  status=Column(Enum(DocumentStatus), default=DocumentStatus.PENDING)
+  progress=Column(Integer, default=0)
+  current_message=Column(String(500), default="Waiting in background queue...")
   created_at=Column(DateTime(timezone=True), server_default=func.now())
