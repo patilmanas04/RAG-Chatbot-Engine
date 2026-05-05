@@ -2,9 +2,11 @@ from langchain_classic.retrievers import EnsembleRetriever
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.retrievers import BM25Retriever
 from langchain_core.prompts import ChatPromptTemplate
-import os, pickle
+from dotenv import load_dotenv
+import os, pickle, time
+
+load_dotenv()
 
 def query_hybrid_rag(project_id: int, user_query: str, chat_history: list):
   embedding_model=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -43,37 +45,58 @@ def query_hybrid_rag(project_id: int, user_query: str, chat_history: list):
     ("human", "Chat History:\n{history}\n\nLatest Question: {question}")
   ])
 
-  rewriter_llm=ChatGoogleGenerativeAI(model="	gemini-2.5-flash", temperature=0.0)
+  rewriter_llm=ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash-lite-preview",
+    temperature=0.0,
+    max_retries=3
+  )
   rewriter_chain=rewriter_prompt|rewriter_llm
 
   if formatted_history.strip():
     standalone_query=rewriter_chain.invoke({
       "history": formatted_history,
       "question": user_query
-    }).content.strip()
+    }).content
+    # time.sleep(2)
+    if isinstance(standalone_query, list):
+      standalone_query=standalone_query[0].get("text", str(standalone_query))
   else:
     standalone_query=user_query
 
   retrieved_documents=hybrid_retriever.invoke(standalone_query)
-  context_text="\n\n".join([doc.page_content for doc in retrieved_documents])
+
+  formatted_context_chunks=[]
+  for doc in retrieved_documents:
+    source_file=doc.metadata.get("source_file", "Unknown Document")
+    page_number=doc.metadata.get("page_number", 1)
+    is_synthetic=doc.metadata.get("is_synthetic", False)
+    formatted_chunk=f"[SOURCE: {source_file}] | PAGE: {page_number} | IS_SYNTHETIC: {is_synthetic}]\n{doc.page_content}"
+    formatted_context_chunks.append(formatted_chunk)
+
+  context_text="\n\n".join(formatted_context_chunks)
 
   prompt_template=ChatPromptTemplate.from_messages([
-    ("system", """You are an elite, highly intelligent AI knowledge assistant. Your primary directive is to answer the user's questions accurately, comprehensively, and strictly based on the provided Knowledge Base Context.
+    ("system", """You are an elite AI knowledge assistant. You must answer questions based ONLY on the provided context.
+
+    CRITICAL INSTRUCTION: You MUST return your answer entirely as a valid JSON object. Do NOT wrap it in markdown blockticks (like ```json), just return the raw JSON. 
+    
+    The JSON must strictly follow this schema:
+    {{
+      "answer": "Your detailed markdown-formatted answer goes here.",
+      "citations": [
+        {{
+          "source_file": "The filename from the context tag",
+          "page_number": The page number from the context tag (integer),
+          "exact_quote": "A short, exact substring (max 8-10 words) from the text to prove the claim. IF IS_SYNTHETIC IS TRUE, THIS MUST BE NULL."
+        }}
+      ]
+    }}
 
     <core_rules>
-    1. NO HALLUCINATIONS: You must base your answer ONLY on the provided context. Do not use your external training data to invent facts, numbers, or details.
-    2. THE "I DON'T KNOW" PROTOCOL: If the context does not contain the information needed to answer the question, you must explicitly state: "I'm sorry, but the provided documents do not contain information about this." Do not attempt to guess.
-    3. CONVERSATIONAL MEMORY: Use the provided Chat History to understand the flow of the conversation and resolve pronouns (e.g., if the user asks "What is its cost?", figure out what "its" refers to from the history).
-    4. OBJECTIVITY: Maintain a professional, objective, and helpful tone. Do not use filler phrases like "According to the context provided..." just give the answer directly.
-    5. CONFLICTING DATA: If the context contains conflicting information, state both pieces of information and mention the discrepancy.
+    1. NO HALLUCINATIONS: Base answers ONLY on the context.
+    2. THE SYNTHETIC RULE: If the context block says 'IS_SYNTHETIC: True', it means the text is an AI description of a visual chart or table. You CANNOT quote it verbatim from the PDF. You MUST set "exact_quote" to null.
+    3. SNIPPET OPTIMIZATION: If 'IS_SYNTHETIC: False', extract the minimum unique substring (max 10 words) required to locate the claim. Do not copy whole paragraphs.
     </core_rules>
-
-    <formatting_guidelines>
-    - Structure your answers clearly using Markdown.
-    - Use bold text for emphasis on key terms, numbers, or IDs.
-    - Use bullet points or numbered lists when explaining steps or listing multiple items.
-    - Keep your responses concise but ensure they fully answer the user's query.
-    </formatting_guidelines>
 
     <chat_history>
     {history}
@@ -86,7 +109,12 @@ def query_hybrid_rag(project_id: int, user_query: str, chat_history: list):
     ("human", "{question}")
   ])
 
-  llm=ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+  llm=ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash-lite-preview",
+    temperature=0.3,
+    response_mime_type="application/json",
+    max_retries=3
+  )
   chain=prompt_template|llm
 
   response=chain.invoke({
@@ -95,4 +123,8 @@ def query_hybrid_rag(project_id: int, user_query: str, chat_history: list):
     "question": user_query
   })
 
-  return response.content
+  raw_content=response.content
+  if isinstance(raw_content, list):
+    raw_content=raw_content[0].get("text", str(raw_content))
+
+  return raw_content
