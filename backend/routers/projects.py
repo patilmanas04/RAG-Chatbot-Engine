@@ -68,33 +68,51 @@ async def upload_documents(
       detail="Project not found or unauthorized"
     )
   
-  temp_dir=f"./temp_uploads/project_{project_id}"
-  os.makedirs(temp_dir, exist_ok=True)
+  permanent_dir=f"./media/projects/{project_id}/documents"
+  os.makedirs(permanent_dir, exist_ok=True)
 
   job_ids=[]
+  document_ids=[]
 
   for file in files:
     if not file.filename.endswith(".pdf"):
       continue # Skip non-pdf files for now
 
-    file_path=os.path.join(temp_dir, file.filename)
+    file_path=os.path.join(permanent_dir, file.filename)
     with open(file_path, "wb") as buffer:
       shutil.copyfileobj(file.file, buffer)
 
+    new_document=models.ProjectDocument(
+      project_id=project_id,
+      file_name=file.filename,
+      file_path=file_path,
+      status=models.DocumentStatus.PENDING,
+      progress=0,
+      current_message="Queued for background processing..."
+    )
+    db.add(new_document)
+    db.commit()
+    db.refresh(new_document)
 
     # Adding the job into the ingestion_queue with the exact arguments it needs
     # A 10 minute timeout because the Google vision takes some time
     job=ingestion_queue.enqueue(
       rag_ingestion,
-      args=(file_path, project_id),
+      args=(file_path, project_id, file.filename, new_document.id),
       job_timeout="10m"
     )
 
+    new_document.job_id=job.id
+    db.commit()
+
     job_ids.append({"filename": file.filename, "job_id": job.id})
+    document_ids.append(new_document.id)
 
   return {
-    "message": f"Successfully queued {len(job_ids)} documents for processing.",
-    "jobs": job_ids
+    "status": "success",
+    "message": "Document uploaded and queued for processing.",
+    "jobs": job_ids,
+    "documents": document_ids
   }
 
 # Chat with the project
@@ -287,3 +305,44 @@ def view_document(
     media_type="application/pdf",
     filename=doc.file_name
   )
+
+# Get the current status of the document being processed
+@router.get("/{project_id}/documents/{document_id}/status")
+def get_document_status(
+  project_id: int,
+  document_id: int,
+  current_user: models.User=Depends(get_current_user),
+  db: Session=Depends(get_db)
+):
+  project=db.query(models.Project).filter(
+    models.Project.id==project_id,
+    models.Project.owner_id==current_user.id
+  ).first()
+
+  if not project:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Project not found or unauthorized."
+    )
+  
+  document=db.query(models.ProjectDocument).filter(
+    models.ProjectDocument.id==document_id,
+    models.ProjectDocument.project_id==project_id
+  ).first()
+
+  if not document:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Document not found."
+    )
+  
+  return {
+    "status": "success",
+    "data": {
+      "document_id": document.id,
+      "file_name": document.file_name,
+      "ingestion_status": document.status,
+      "progress": document.progress,       
+      "current_message": document.current_message
+    }
+  }
