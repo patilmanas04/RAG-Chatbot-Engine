@@ -7,7 +7,7 @@ from typing import List
 from redis import Redis
 from rq import Queue
 from schemas import ChatRequest
-import models, os, shutil
+import models, os, shutil, json
 
 from rag_pipeline.rag_ingestion_pipeline import rag_ingestion
 from rag_pipeline.rag_retrieval_pipeline import query_hybrid_rag
@@ -125,16 +125,26 @@ def chat_with_project(
   user_message=models.ChatMessage(
     project_id=project_id,
     role="user",
-    content=request.message
+    content=request.message,
+    citations=[]
   )
   db.add(user_message)
   db.commit()
 
   try:
-    ai_response_text=query_hybrid_rag(
+    raw_ai_response=query_hybrid_rag(
       project_id=project_id,
       user_query=request.message,
       chat_history=recent_history
+    )
+
+    parsed_data=json.loads(raw_ai_response)
+    answer_text=parsed_data.get("answer", "I encountered an error generating the text.")
+    citations_list=parsed_data.get("citations", [])
+  except json.JSONDecodeError:
+    raise HTTPException(
+      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      detail="AI Output Error: Failed to parse structural response."
     )
   except FileNotFoundError as e:
     raise HTTPException(
@@ -150,7 +160,8 @@ def chat_with_project(
   ai_message=models.ChatMessage(
     project_id=project_id,
     role="assistant",
-    content=ai_response_text
+    content=answer_text,
+    citations=citations_list
   )
   db.add(ai_message)
   db.commit()
@@ -160,7 +171,8 @@ def chat_with_project(
     "status": "success",
     "data": {
       "role": ai_message.role,
-      "content": ai_message.content
+      "content": ai_message.content,
+      "citations": ai_message.citations
     }
   }
 
