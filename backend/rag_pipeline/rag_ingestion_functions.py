@@ -110,8 +110,11 @@ def create_ai_enhanced_summary(content_data_of_chunk):
 
     message=HumanMessage(content=message_content)
     response=llm.invoke([message])
+    raw_content=response.content
+    if isinstance(raw_content, list):
+      raw_content=raw_content[0].get("text", str(raw_content))
 
-    return response.content
+    return raw_content
   except Exception as e:
     summary=f"{text}"
     if tables:
