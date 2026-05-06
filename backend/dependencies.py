@@ -37,7 +37,14 @@ def get_current_user(token:str=Depends(oauth2_scheme), db:Session=Depends(get_db
   except jwt.InvalidTokenError:
     raise credentials_exception
   
-  user=db.query(models.User).filter(models.User.id==str(user_id)).first()
+  user=db.query(
+    models.User.id,
+    models.User.first_name,
+    models.User.last_name,
+    models.User.email
+  ).filter(
+    models.User.id==str(user_id)
+  ).first()
   if user is None:
     raise credentials_exception
   
