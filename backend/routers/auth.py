@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from dependencies import get_db
+from dependencies import get_db, get_current_user
 from datetime import datetime, timedelta, timezone
 import bcrypt, models, schemas, jwt, os
 from dotenv import load_dotenv
@@ -38,7 +38,7 @@ def get_access_token(data: dict) -> str:
 
 # 1. Register a new user
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register_user(user:schemas.UserCreate, db:Session=Depends(get_db)):
+def register_user(user: schemas.UserCreate, db: Session=Depends(get_db)):
   # Check if the user already exists in the TiDB
   existing_user=db.query(models.User.id).filter(models.User.email==user.email).first()
   if existing_user:
@@ -48,7 +48,12 @@ def register_user(user:schemas.UserCreate, db:Session=Depends(get_db)):
     )
   
   hashed_password=get_hash_password(user.password)
-  new_user=models.User(email=user.email, password=hashed_password)
+  new_user=models.User(
+    first_name=user.first_name,
+    last_name=user.last_name,
+    email=user.email,
+    password=hashed_password
+  )
 
   db.add(new_user)
   db.commit()
@@ -74,3 +79,9 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(), db:Session=Depends(get_
   access_token=get_access_token({"sub": str(user.id)})
 
   return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/users/me", response_model=schemas.UserResponse)
+def read_users_me(
+  current_user: models.User=Depends(get_current_user)
+):
+  return current_user
