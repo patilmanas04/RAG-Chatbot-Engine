@@ -8,6 +8,8 @@ from redis import Redis
 from rq import Queue
 from schemas import ChatRequest
 import models, os, shutil, json
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from rag_pipeline.rag_ingestion_pipeline import rag_ingestion
 from rag_pipeline.rag_retrieval_pipeline import query_hybrid_rag
@@ -345,4 +347,55 @@ def get_document_status(
       "progress": document.progress,       
       "current_message": document.current_message
     }
+  }
+
+# Delete the project
+@router.delete("/{project_id}")
+def delete_project(
+  project_id: int,
+  current_user: models.User=Depends(get_current_user),
+  db: Session=Depends(get_db)
+):
+  project=db.query(models.Project).filter(
+    models.Project.id==project_id,
+    models.Project.owner_id==current_user.id
+  ).first()
+
+  if not project:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Project not found or unauthorized."
+    )
+  
+  project_dir=f"./media/projects/{project_id}"
+  if os.path.exists(project_dir):
+    try:
+      shutil.rmtree(project_dir)
+    except Exception as e:
+      print(f"Warning: Failed to delete media folder: {e}")
+  
+  bm25_indices_dir=f"./dbv1/bm25_indices/project_vault_{project_id}.pkl"
+  if os.path.exists(bm25_indices_dir):
+    try:
+      os.remove(bm25_indices_dir)
+    except Exception as e:
+      print(f"Warning: Failed to delete BM25 file: {e}")
+  
+  try:
+    embedding_model=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    vector_store=Chroma(
+      persist_directory="dbv1/chromadb",
+      collection_name=f"project_vault_{project_id}",
+      embedding_function=embedding_model
+    )
+    vector_store.delete_collection()
+  except Exception as e:
+    print(f"Chroma DB deletion skipped or failed (likely empty): {e}")
+
+  db.delete(project)
+  db.commit()
+
+  return {
+    "status": "success",
+    "message": f"Project {project_id} and all associated knowledge base data have been permanently deleted."
   }
