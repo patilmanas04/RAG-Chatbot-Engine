@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ThemeToggle";
 import API from "../api/axios";
 import ReactMarkdown from "react-markdown";
@@ -8,6 +8,11 @@ import PDFViewer from "../components/PDFViewer";
 
 const ProjectWorkspace = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+
+  // Project Settings State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
 
   // Documents State
   const [documents, setDocuments] = useState([]);
@@ -33,6 +38,7 @@ const ProjectWorkspace = () => {
   
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const textareaRef = useRef(null);
   const pollIntervals = useRef({});
 
   // Cleanup polling intervals on unmount
@@ -227,13 +233,31 @@ const ProjectWorkspace = () => {
     }
   };
 
+  const handleInput = (e) => {
+    setInputMessage(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
+
   const handleSendMessage = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (!inputMessage.trim() || chatLoading) return;
 
     const userMessage = { role: "user", content: inputMessage.trim() };
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     setChatLoading(true);
 
     try {
@@ -253,6 +277,19 @@ const ProjectWorkspace = () => {
       setMessages((prev) => [...prev, { role: "assistant", content: errorMessage }]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    setDeletingProject(true);
+    try {
+      await API.delete(`/projects/${id}`);
+      showToast("Project deleted successfully.", "success");
+      setTimeout(() => navigate('/dashboard'), 800);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete project.", "error");
+      setDeletingProject(false);
     }
   };
 
@@ -469,7 +506,7 @@ const ProjectWorkspace = () => {
       </aside>
 
       {/* Middle Column (Chat Interface) - Dynamically expands to 80% if right panel is closed */}
-      <main className={`${selectedDoc ? 'w-[40%]' : 'w-[80%]'} shrink-0 border-r border-edge flex flex-col h-full bg-page/50 transition-all duration-300 ease-in-out relative`}>
+      <main className={`${selectedDoc ? 'w-[40%]' : 'w-[80%]'} shrink-0 border-r border-edge flex flex-col h-full bg-page/50 transition-all duration-150 ease-in-out relative`}>
         <header className="border-b border-edge px-6 py-4 backdrop-blur-md bg-header flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
@@ -482,7 +519,19 @@ const ProjectWorkspace = () => {
               <p className="text-xs text-muted">Ask questions about your uploaded documents</p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-500 hover:text-white border border-red-500/20 hover:bg-red-500 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-red-500/20"
+              title="Delete Project"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              DELETE
+            </button>
+            <ThemeToggle />
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-8" ref={chatContainerRef} onScroll={handleScroll}>
@@ -522,12 +571,12 @@ const ProjectWorkspace = () => {
                       </svg>
                     )}
                   </div>
-                  <div className={`max-w-[80%] ${msg.role === "user" ? "bg-surface border border-edge rounded-2xl rounded-tr-sm px-5 py-3 shadow-sm" : ""}`}>
+                  <div className={`max-w-[80%] transition-colors duration-150 ${msg.role === "user" ? "bg-surface border border-edge rounded-2xl rounded-tr-sm px-5 py-3 shadow-sm" : ""}`}>
                     {msg.role === "user" ? (
                       <p className="text-sm text-heading leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                     ) : (
                       <div className="flex flex-col">
-                        <div className="prose dark:prose-invert prose-sm max-w-none text-heading leading-relaxed prose-p:my-2 first:prose-p:mt-0 last:prose-p:mb-0 prose-a:text-violet-400 prose-strong:text-heading">
+                        <div className="prose prose-sm max-w-none leading-relaxed prose-p:my-2 first:prose-p:mt-0 last:prose-p:mb-0 prose-a:text-violet-400 prose-headings:text-heading prose-p:text-heading prose-li:text-heading prose-strong:text-heading prose-code:text-heading prose-blockquote:text-heading prose-th:text-heading prose-td:text-heading">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {msg.content}
                           </ReactMarkdown>
@@ -542,7 +591,7 @@ const ProjectWorkspace = () => {
                                 <button 
                                   key={cIdx} 
                                   onClick={() => relatedDoc && handleSelectDocument(relatedDoc, cit.page_number, cit.exact_quote)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-edge hover:border-violet-500/40 hover:bg-violet-500/5 transition-all text-xs text-muted hover:text-violet-400 cursor-pointer shadow-sm"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-edge hover:border-violet-500/40 hover:bg-violet-500/5 transition-all duration-150 text-xs text-muted hover:text-violet-400 cursor-pointer shadow-sm"
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -584,7 +633,7 @@ const ProjectWorkspace = () => {
         {showScrollButton && (
           <button 
             onClick={scrollToBottom}
-            className="absolute bottom-28 right-1/2 translate-x-1/2 w-10 h-10 bg-page border border-edge-strong rounded-full flex items-center justify-center shadow-xl hover:scale-105 text-heading transition-all z-50 cursor-pointer animate-in fade-in zoom-in duration-200"
+            className="absolute bottom-28 right-1/2 translate-x-1/2 w-10 h-10 bg-page border border-edge-strong rounded-full flex items-center justify-center shadow-xl hover:scale-105 text-heading transition-all duration-150 z-50 cursor-pointer animate-in fade-in zoom-in"
             aria-label="Scroll to bottom"
           >
             <div className="flex items-center justify-center w-full h-full">
@@ -595,7 +644,7 @@ const ProjectWorkspace = () => {
           </button>
         )}
 
-        <div className="border-t border-edge px-6 py-4 bg-surface/80 backdrop-blur-md relative z-10">
+        <div className="border-t border-edge px-6 py-4 bg-surface/80 backdrop-blur-md relative z-10 transition-colors duration-150">
           {(() => {
             const hasProcessingDocs = documents.some(doc => {
               const currentStatus = doc.status || doc.ingestion_status;
@@ -616,31 +665,37 @@ const ProjectWorkspace = () => {
 
             if (documents.length === 0 && !docsLoading) {
               return (
-                <div className="max-w-3xl mx-auto flex items-center justify-center py-3 px-4 bg-input/50 border border-edge-strong rounded-xl text-muted text-sm shadow-sm cursor-not-allowed">
+                <div className="max-w-3xl mx-auto flex items-center justify-center py-3 px-4 bg-input/50 border border-edge-strong rounded-xl text-muted text-sm shadow-sm cursor-not-allowed transition-colors duration-150">
                   Upload documents to the knowledge base to start chatting.
                 </div>
               );
             }
 
             return (
-              <form onSubmit={handleSendMessage} className="max-w-3xl mx-auto flex items-center gap-3 relative">
-                <input
+              <form onSubmit={handleSendMessage} className="max-w-3xl mx-auto flex items-end gap-3 relative p-2 rounded-2xl bg-input border border-edge-strong focus-within:ring-2 focus-within:ring-violet-500/40 focus-within:border-violet-500/40 transition-all duration-150 shadow-sm">
+                <textarea
                   id="input-chat-message"
-                  type="text"
+                  ref={textareaRef}
                   value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
                   disabled={isChatDisabled}
                   placeholder={getPlaceholder()}
-                  className="flex-1 bg-input border border-edge-strong rounded-xl px-4 py-3 text-sm text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-all disabled:opacity-50 shadow-sm"
+                  rows={1}
+                  className="w-full bg-transparent outline-none resize-none overflow-y-auto text-heading placeholder-muted disabled:opacity-50 text-sm py-2.5 px-3 max-h-48 scrollbar-thin scrollbar-thumb-edge scrollbar-track-transparent transition-colors duration-150"
                   autoComplete="off"
                 />
                 <button
                   id="btn-send-message"
                   type="submit"
                   disabled={!inputMessage.trim() || isChatDisabled}
-                  className="px-4 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 hover:shadow-violet-600/40 hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className={`p-2.5 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 ${
+                    !inputMessage.trim() || isChatDisabled
+                      ? 'bg-edge text-muted opacity-50 cursor-not-allowed'
+                      : 'bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/25 cursor-pointer'
+                  }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                   </svg>
                 </button>
@@ -683,6 +738,59 @@ const ProjectWorkspace = () => {
             )}
           </div>
         </section>
+      )}
+
+      {/* Delete Project Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-backdrop backdrop-blur-sm" onClick={() => !deletingProject && setShowDeleteModal(false)} />
+          <div className="relative w-full max-w-md bg-modal backdrop-blur-xl border border-edge-strong rounded-2xl p-8 shadow-2xl">
+            <button onClick={() => !deletingProject && setShowDeleteModal(false)} className="absolute top-4 right-4 text-muted hover:text-heading transition-colors cursor-pointer p-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-heading">Delete Project</h2>
+                <p className="text-xs text-body">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-heading mb-6">
+              Are you sure you want to delete this project? This action cannot be undone and will erase all documents and chats.
+            </p>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                type="button" 
+                onClick={() => setShowDeleteModal(false)} 
+                disabled={deletingProject}
+                className="flex-1 py-3 rounded-xl border border-edge-strong text-sm font-medium text-body hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleDeleteProject} 
+                disabled={deletingProject} 
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-sm font-semibold text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {deletingProject ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Deleting...
+                  </span>
+                ) : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

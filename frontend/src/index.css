@@ -83,20 +83,4 @@
   color-scheme: light;
 }
 
-/* ─── Smooth theme transition ─── */
-*,
-*::before,
-*::after {
-  transition-property: background-color, border-color, color, box-shadow;
-  transition-duration: 200ms;
-  transition-timing-function: ease-in-out;
-}
 
-/* Opt-out for elements that have their own transitions */
-.no-theme-transition,
-.no-theme-transition *,
-input,
-textarea,
-button {
-  transition-property: none;
-}

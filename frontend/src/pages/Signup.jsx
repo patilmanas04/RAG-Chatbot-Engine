@@ -4,6 +4,8 @@ import API from "../api/axios";
 import ThemeToggle from "../components/ThemeToggle";
 
 const Signup = () => {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,9 +32,9 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      await API.post("/register", { email, password });
+      await API.post("/register", { email, password, first_name: firstName.trim(), last_name: lastName.trim() });
       navigate("/login", {
-        state: { successMessage: "Account created! Please sign in." },
+        state: { successMessage: "Account created successfully! Please sign in with your new credentials." },
       });
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -80,6 +82,37 @@ const Signup = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="flex gap-4">
+              <div className="w-1/2">
+                <label htmlFor="input-signup-first-name" className="block text-sm font-medium text-body mb-1.5">
+                  First Name
+                </label>
+                <input
+                  id="input-signup-first-name"
+                  type="text"
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="John"
+                  className="w-full bg-input border border-edge-strong rounded-xl px-4 py-3 text-sm text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-all"
+                />
+              </div>
+              <div className="w-1/2">
+                <label htmlFor="input-signup-last-name" className="block text-sm font-medium text-body mb-1.5">
+                  Last Name
+                </label>
+                <input
+                  id="input-signup-last-name"
+                  type="text"
+                  required
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Doe"
+                  className="w-full bg-input border border-edge-strong rounded-xl px-4 py-3 text-sm text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-all"
+                />
+              </div>
+            </div>
+
             <div>
               <label htmlFor="input-signup-email" className="block text-sm font-medium text-body mb-1.5">
                 Email address

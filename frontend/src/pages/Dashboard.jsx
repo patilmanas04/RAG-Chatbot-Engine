@@ -8,6 +8,7 @@ const Dashboard = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -15,10 +16,31 @@ const Dashboard = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const { logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => {
+    fetchProjects();
+    fetchCurrentUser();
+  }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await API.get("/users/me");
+      setCurrentUser(res.data);
+    } catch (err) {
+      console.error("Failed to fetch user profile:", err);
+    }
+  };
 
   const fetchProjects = async () => {
     try {
@@ -43,11 +65,27 @@ const Dashboard = () => {
       setNewProjectName("");
       setNewProjectDesc("");
       fetchProjects();
+      showToast("Project created successfully!", "success");
     } catch (err) {
       const detail = err.response?.data?.detail;
       setCreateError(typeof detail === "string" ? detail : "Failed to create project.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+    setDeleting(true);
+    try {
+      await API.delete(`/projects/${projectToDelete.id}`);
+      showToast("Project deleted successfully.", "success");
+      setProjects((prev) => prev.filter(p => p.id !== projectToDelete.id));
+      setProjectToDelete(null);
+    } catch (err) {
+      showToast("Failed to delete project.", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -72,7 +110,27 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-page via-page-alt to-page text-heading font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-page via-page-alt to-page text-heading font-sans relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-5 duration-300 ${
+          toast.type === "success" 
+            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500" 
+            : "bg-red-500/10 border border-red-500/20 text-red-500"
+        }`}>
+          {toast.type === "success" ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          )}
+          <span className="text-sm font-medium">{toast.message}</span>
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-edge backdrop-blur-xl bg-header">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -105,7 +163,12 @@ const Dashboard = () => {
         <div className="flex items-end justify-between mb-10">
           <div>
             <p className="text-xs text-violet-500 font-semibold tracking-widest uppercase mb-2">Overview</p>
-            <h2 className="text-3xl font-extrabold tracking-tight text-heading">Your Projects</h2>
+            <h2 className="text-3xl font-extrabold tracking-tight text-heading">
+              {currentUser
+                ? <>Welcome, {currentUser.first_name} {currentUser.last_name}</>
+                : <span className="inline-flex items-center gap-2">Welcome<span className="inline-block h-7 w-48 bg-skeleton rounded-lg animate-pulse align-middle" /></span>
+              }
+            </h2>
             <p className="text-body mt-1.5 text-sm max-w-md">
               Manage your RAG knowledge bases. Upload documents, build context, and chat with AI.
             </p>
@@ -181,7 +244,7 @@ const Dashboard = () => {
                 key={project.id}
                 id={`project-card-${project.id}`}
                 onClick={() => navigate(`/project/${project.id}`)}
-                className={`group text-left bg-surface hover:bg-surface-hover border border-edge-strong hover:border-edge-hover rounded-2xl p-6 transition-all duration-300 cursor-pointer hover:shadow-xl ${accentShadows[project.id % accentShadows.length]} hover:-translate-y-0.5`}
+                className={`group text-left bg-surface hover:bg-surface-hover border border-edge-strong hover:border-edge-hover rounded-2xl p-6 transition-all duration-150 cursor-pointer hover:shadow-xl ${accentShadows[project.id % accentShadows.length]} hover:-translate-y-0.5`}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -191,13 +254,28 @@ const Dashboard = () => {
                       </svg>
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-heading truncate group-hover:text-violet-500 transition-colors">{project.name}</h3>
+                      <h3 className="text-sm font-bold text-heading truncate group-hover:text-violet-500 transition-colors duration-150">{project.name}</h3>
                       <p className="text-xs text-muted mt-0.5">ID: {project.id}</p>
                     </div>
                   </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-faint group-hover:text-body group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <div className="flex items-center gap-1">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setProjectToDelete(project);
+                      }}
+                      className="p-1.5 rounded-lg text-faint hover:text-red-500 hover:bg-red-500/10 transition-all duration-150 shrink-0 cursor-pointer"
+                      title="Delete Project"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-faint group-hover:text-body group-hover:translate-x-0.5 transition-all duration-150 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
                 {project.description && (
                   <p className="text-xs text-body line-clamp-2 mb-4 leading-relaxed">{project.description}</p>
@@ -265,6 +343,59 @@ const Dashboard = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Modal */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-backdrop backdrop-blur-sm" onClick={() => !deleting && setProjectToDelete(null)} />
+          <div className="relative w-full max-w-md bg-modal backdrop-blur-xl border border-edge-strong rounded-2xl p-8 shadow-2xl">
+            <button onClick={() => !deleting && setProjectToDelete(null)} className="absolute top-4 right-4 text-muted hover:text-heading transition-colors cursor-pointer p-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-heading">Delete Project</h2>
+                <p className="text-xs text-body">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-heading mb-6">
+              Are you sure you want to delete <span className="font-semibold text-violet-400">"{projectToDelete.name}"</span>? This action cannot be undone and will erase all documents and chats.
+            </p>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                type="button" 
+                onClick={() => setProjectToDelete(null)} 
+                disabled={deleting}
+                className="flex-1 py-3 rounded-xl border border-edge-strong text-sm font-medium text-body hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleDeleteProject} 
+                disabled={deleting} 
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-sm font-semibold text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {deleting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Deleting...
+                  </span>
+                ) : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}
