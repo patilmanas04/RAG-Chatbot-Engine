@@ -16,6 +16,8 @@ class User(Base):
 
   # Columns
   id=Column(Integer, primary_key=True, index=True)
+  first_name=Column(String(100), nullable=False)
+  last_name=Column(String(100), nullable=False)
   email=Column(String(255), unique=True, index=True)
   password=Column(String(255))
   is_active=Column(Boolean, default=True)
