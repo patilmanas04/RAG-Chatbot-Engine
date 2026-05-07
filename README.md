@@ -76,7 +76,7 @@ Follow these step-by-step instructions to run the RAG-Chatbot-Engine on your loc
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/yourusername/RAG-Chatbot-Engine.git](https://github.com/yourusername/RAG-Chatbot-Engine.git)
+git clone https://github.com/patilmanas04/RAG-Chatbot-Engine.git
 cd RAG-Chatbot-Engine
 ```
 
